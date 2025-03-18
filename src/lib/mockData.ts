@@ -185,6 +185,76 @@ export function getMockDashboardData(): DashboardData {
         status: 'Permitted',
         latitude: 37.6536,
         longitude: -122.4140
+      },
+      {
+        id: '6',
+        name: 'Gateway at Millbrae Station',
+        address: '200 Rollins Rd, Millbrae',
+        units: 320,
+        affordabilityLevel: 'Mixed Income',
+        status: 'Under Construction',
+        latitude: 37.5986,
+        longitude: -122.3868
+      },
+      {
+        id: '7',
+        name: 'The Ashton',
+        address: '690 Veterans Blvd, Redwood City',
+        units: 92,
+        affordabilityLevel: 'Market Rate',
+        status: 'Completed',
+        latitude: 37.4897,
+        longitude: -122.2372
+      },
+      {
+        id: '8',
+        name: 'Colma Veterans Housing',
+        address: '1670 Mission Rd, Colma',
+        units: 66,
+        affordabilityLevel: 'Very Low Income',
+        status: 'Planned',
+        latitude: 37.6784,
+        longitude: -122.4447
+      },
+      {
+        id: '9',
+        name: 'Linda Mar Apartments',
+        address: '1125 Oddstad Blvd, Pacifica',
+        units: 104,
+        affordabilityLevel: 'Low Income',
+        status: 'Completed',
+        latitude: 37.6024,
+        longitude: -122.4869
+      },
+      {
+        id: '10',
+        name: 'Pescadero Apartments',
+        address: '350 Stage Rd, Pescadero',
+        units: 38,
+        affordabilityLevel: 'Very Low Income',
+        status: 'Permitted',
+        latitude: 37.2554,
+        longitude: -122.3867
+      },
+      {
+        id: '11',
+        name: 'Burlingame Senior Housing',
+        address: '1418 Trousdale Dr, Burlingame',
+        units: 82,
+        affordabilityLevel: 'Low Income Senior',
+        status: 'Under Construction',
+        latitude: 37.5878,
+        longitude: -122.3751
+      },
+      {
+        id: '12',
+        name: 'Half Moon Bay Workforce Housing',
+        address: '555 Kelly Ave, Half Moon Bay',
+        units: 45,
+        affordabilityLevel: 'Moderate Income',
+        status: 'Planned',
+        latitude: 37.4633,
+        longitude: -122.4408
       }
     ],
     incomeDistribution: [
