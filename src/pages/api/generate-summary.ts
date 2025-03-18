@@ -6,6 +6,7 @@ import { rateLimitMiddleware } from '@/lib/security/rateLimit';
 type RequestData = {
   dashboardData: DashboardData;
   currentView: string;
+  forceRegenerate?: boolean;
 };
 
 type ResponseData = {
@@ -166,7 +167,7 @@ export default async function handler(
   }
 
   try {
-    const { dashboardData, currentView } = req.body as RequestData;
+    const { dashboardData, currentView, forceRegenerate } = req.body as RequestData;
     
     if (!dashboardData) {
       return res.status(400).json({
@@ -179,10 +180,11 @@ export default async function handler(
     const cacheKey = createCacheKey(dashboardData, currentView);
     
     // Check if we have a cached response that's less than 5 minutes old
+    // Skip cache if forceRegenerate is true
     const cachedResponse = summaryCache.get(cacheKey);
     const cacheExpiryTime = 5 * 60 * 1000; // 5 minutes in milliseconds
     
-    if (cachedResponse && (Date.now() - cachedResponse.timestamp) < cacheExpiryTime) {
+    if (!forceRegenerate && cachedResponse && (Date.now() - cachedResponse.timestamp) < cacheExpiryTime) {
       console.log('Returning cached summary for', currentView);
       return res.status(200).json({
         success: true,

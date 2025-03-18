@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import styled from 'styled-components';
 import { DashboardData } from '@/models/InternalHCDData';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -301,24 +301,25 @@ const extractAndFormatNumericalData = (text: string): string => {
   return result;
 };
 
-// Create a memoized summary component
-const MemorizedSummaryContent = React.memo(
-  ({ content, analyzingText }: { content: string; analyzingText: string }) => {
-    // Format the markdown only when we have content
-    if (!content) {
-      return <p>{analyzingText}</p>;
-    }
-    
-    return <>{formatMarkdown(content)}</>;
-  },
-  // Custom comparison function to prevent unnecessary rerenders
-  (prevProps, nextProps) => {
-    // Only rerender if content actually changed or we're showing loading
-    if (!prevProps.content && !nextProps.content) return true;
-    if (prevProps.content === nextProps.content) return true;
-    return false;
+// Create a memoized component for the summary content
+interface SummaryContentProps {
+  content: string;
+  analyzingText: string;
+}
+
+const SummaryContent = ({ content, analyzingText }: SummaryContentProps) => {
+  if (!content || content.trim() === '') {
+    return <>{analyzingText}</>;
   }
-);
+  
+  return <>{formatMarkdown(content)}</>;
+};
+
+// Memoize the component to prevent unnecessary re-renders
+const MemorizedSummaryContent = memo(SummaryContent, (prev, next) => {
+  // Only re-render if the content actually changes
+  return prev.content === next.content;
+});
 
 // Add a debounced update function at the top of the AIAssistant component
 const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView }) => {
@@ -333,6 +334,10 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView })
   const [lastSuccessfulSummary, setLastSuccessfulSummary] = useState<string>('');
   const summaryRef = useRef(''); // Reference to hold current summary text
   const [isMouseOver, setIsMouseOver] = useState(false);
+  
+  // Add refs to store previous data to prevent unnecessary regeneration
+  const previousDataRef = useRef<string>('');
+  const forceRegenerateRef = useRef<boolean>(false);
   
   // Add a freezeUpdates ref to completely halt content updates during interactions
   const freezeUpdates = useRef(false);
@@ -371,6 +376,28 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView })
     setSummary('');
     summaryRef.current = ''; // Reset the ref as well
     
+    // Check for gibberish before starting the stream
+    // This provides an early safety check
+    const words = text.split(/\s+/);
+    const gibberishRatio = words.filter(word => 
+      (/[^\w\s.,;:!?'-]/.test(word) && word.length > 3) || 
+      /(.)\1{3,}/.test(word) || 
+      (word.length > 15) ||
+      (/[A-Z]{4,}/.test(word) && !/^[A-Z]+$/.test(word))
+    ).length / words.length;
+    
+    if (gibberishRatio > 0.15 || text.length < 20 || words.length < 5) {
+      console.warn('Early gibberish detection triggered - using last successful summary');
+      
+      if (lastSuccessfulSummary && lastSuccessfulSummary.length > 0) {
+        // Use the last good summary
+        setSummary(lastSuccessfulSummary);
+        summaryRef.current = lastSuccessfulSummary;
+        setIsGenerating(false);
+        return;
+      }
+    }
+    
     let i = 0;
     const interval = setInterval(() => {
       // If updates are frozen, skip this update cycle
@@ -389,11 +416,34 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView })
         setIsGenerating(false);
         
         // Save last successful summary for regeneration
-        if (!hasError) {
+        if (!hasError && !isGibberish(text)) {
+          console.log('Saving successful summary');
           setLastSuccessfulSummary(text);
         }
       }
     }, 5); // Slightly slower for better readability
+  };
+  
+  // Helper function to detect gibberish text
+  const isGibberish = (text: string): boolean => {
+    if (!text || text.length < 20) return true;
+    
+    const words = text.split(/\s+/);
+    if (words.length < 5) return true;
+    
+    let gibberishCount = 0;
+    for (const word of words) {
+      if (
+        (/[^\w\s.,;:!?'-]/.test(word) && word.length > 3) || 
+        /(.)\1{3,}/.test(word) || 
+        (word.length > 15) ||
+        (/[A-Z]{4,}/.test(word) && !/^[A-Z]+$/.test(word))
+      ) {
+        gibberishCount++;
+      }
+    }
+    
+    return (gibberishCount / words.length) > 0.15;
   };
 
   // Update the formatSummary function to add the numerical data bullet points
@@ -401,27 +451,56 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView })
   const formatSummary = (text: string): string => {
     // Check for gibberish or invalid text (simple heuristic)
     const words = text.split(/\s+/);
-    const gibberishThreshold = 0.2; // Adjust based on testing
+    const gibberishThreshold = 0.15; // Lower threshold to be more cautious
     
     // Count potential gibberish words (randomly generated text often has unusual character patterns)
     let gibberishCount = 0;
+    let consecutiveGibberishWords = 0;
+    let maxConsecutiveGibberish = 0;
+    
     for (const word of words) {
       // Check for unusual character sequences that might indicate gibberish
-      if (
+      const isGibberishWord = (
         (/[^\w\s.,;:!?'-]/.test(word) && word.length > 3) || // Unusual characters
         /(.)\1{3,}/.test(word) || // Repeated characters (more than 3 times)
         (word.length > 15) || // Extremely long words
         (/[A-Z]{4,}/.test(word) && !/^[A-Z]+$/.test(word)) // Random capitalization
-      ) {
+      );
+      
+      if (isGibberishWord) {
         gibberishCount++;
+        consecutiveGibberishWords++;
+        maxConsecutiveGibberish = Math.max(maxConsecutiveGibberish, consecutiveGibberishWords);
+      } else {
+        consecutiveGibberishWords = 0;
       }
     }
     
     const gibberishRatio = gibberishCount / words.length;
     
-    // If it appears to be gibberish, use the fallback summary
-    if (gibberishRatio > gibberishThreshold || text.length < 20) {
+    // Log gibberish detection metrics to help with debugging
+    console.log(`Gibberish detection: ratio=${gibberishRatio.toFixed(2)}, maxConsecutive=${maxConsecutiveGibberish}`);
+    
+    // If it appears to be gibberish, use the fallback summary or last good summary
+    // Consider text gibberish if:
+    // 1. High ratio of gibberish words overall
+    // 2. Several consecutive gibberish words (indicating complete nonsense)
+    // 3. Too short to be meaningful
+    if (
+      gibberishRatio > gibberishThreshold || 
+      maxConsecutiveGibberish >= 4 || 
+      text.length < 20 ||
+      words.length < 5
+    ) {
       setHasError(true);
+      console.warn('Detected gibberish text - using fallback or last good summary');
+      
+      // If we have a last successful summary, use it instead of generating a new fallback
+      if (lastSuccessfulSummary && lastSuccessfulSummary.length > 0) {
+        console.log('Using last successful summary as fallback');
+        return lastSuccessfulSummary;
+      }
+      
       return generateFallbackSummary(dashboardData, currentView);
     }
     
@@ -436,7 +515,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView })
   };
 
   // Generate a summary based on dashboard data and current view
-  const generateSummary = async () => {
+  const generateSummary = async (forceRegenerate = false) => {
     setIsGenerating(true);
     setSource(undefined);
     setHasError(false);
@@ -450,7 +529,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ dashboardData, currentView })
         },
         body: JSON.stringify({
           dashboardData,
-          currentView
+          currentView,
+          forceRegenerate, // Pass this flag to the API to bypass cache if needed
         }),
       });
       
@@ -546,10 +626,44 @@ This map provides a detailed overview of the local housing projects currently un
     translateSummary();
   }, [summary, language, isMouseOver]);
 
-  // Generate summary when the dashboard data or view changes
+  // Modify the useEffect to prevent regeneration unless data has actually changed
   useEffect(() => {
-    if (!isMinimized) {
-      generateSummary();
+    if (isMinimized) return;
+    
+    // Create a fingerprint of the data to detect actual changes
+    const dataFingerprint = JSON.stringify({
+      currentView,
+      totalPlannedUnits: dashboardData.summaryStats.totalPlannedUnits,
+      permitedUnits: dashboardData.summaryStats.permitedUnits,
+      completedUnits: dashboardData.summaryStats.completedUnits,
+      affordableUnits: dashboardData.summaryStats.affordableUnits,
+    });
+    
+    // Check if data has changed or if it's the first load
+    const isFirstLoad = previousDataRef.current === '';
+    const hasDataChanged = previousDataRef.current !== dataFingerprint;
+    
+    console.log(
+      `Summary generation check: isFirstLoad=${isFirstLoad}, hasDataChanged=${hasDataChanged}, forceRegenerate=${forceRegenerateRef.current}`
+    );
+    
+    // Only generate a new summary if:
+    // 1. It's the first load
+    // 2. The data has actually changed
+    // 3. Force regenerate is requested
+    if (isFirstLoad || hasDataChanged || forceRegenerateRef.current) {
+      console.log('Generating new summary due to:', 
+        isFirstLoad ? 'first load' : 
+        hasDataChanged ? 'data changed' : 'manual refresh'
+      );
+      
+      generateSummary(forceRegenerateRef.current);
+      // Reset force regenerate flag
+      forceRegenerateRef.current = false;
+      // Update previous data fingerprint
+      previousDataRef.current = dataFingerprint;
+    } else {
+      console.log('Skipping summary generation - no meaningful changes detected');
     }
   }, [dashboardData, currentView, isMinimized]);
 
@@ -656,7 +770,9 @@ This map provides a detailed overview of the local housing projects currently un
               <RefreshButton 
                 onClick={(e) => {
                   e.stopPropagation();
-                  generateSummary();
+                  // Set force regenerate flag to true
+                  forceRegenerateRef.current = true;
+                  generateSummary(true);
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
