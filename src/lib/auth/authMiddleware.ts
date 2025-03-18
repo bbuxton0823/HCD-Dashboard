@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions, JwtPayload } from 'jsonwebtoken';
 import { UserRole } from './AuthContext';
 
 // Environment variable for JWT secret (should be stored in .env)
@@ -98,10 +98,9 @@ export function withRoles(handler: AuthenticatedHandler, allowedRoles: UserRole[
  * @param expiresIn Token expiration time (default 7 days)
  * @returns JWT token string
  */
-export function createToken(payload: Record<string, any>, expiresIn: string = '7d'): string {
-  // Use a separate options object for sign
-  const options = { expiresIn };
-  return jwt.sign(payload, JWT_SECRET, options);
+export function createToken(payload: Record<string, any>, expiresIn: string | number = '7d'): string {
+  // Direct approach for compatibility with Vercel builds
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: expiresIn as any });
 }
 
 /**
