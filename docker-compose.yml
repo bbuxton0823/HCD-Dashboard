@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Main web application
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - BROWSER_TOOLS_URL=http://browser-tools:3500
+      - PUPPETEER_MCP_URL=http://puppeteer-mcp:3600
+      - NEXT_PUBLIC_USE_MOCK_DATA=false
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - browser-tools
+      - puppeteer-mcp
+    volumes:
+      - ./:/app
+      - /app/node_modules
+
+  # Browser Tools MCP
+  browser-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser-tools
+    ports:
+      - "3500:3500"
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+    # Configure reasonable resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+          
+  # Custom Puppeteer MCP
+  puppeteer-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.puppeteer
+    ports:
+      - "3600:3600"
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+    # Configure reasonable resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G 
