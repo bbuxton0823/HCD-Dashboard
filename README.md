@@ -45,8 +45,8 @@ The dashboard features an AI assistant that:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/hcd-dashboard.git
-   cd hcd-dashboard
+   git clone https://github.com/bbuxton0823/HCD-Dashboard.git
+   cd HCD-Dashboard
    ```
 
 2. Install dependencies:
@@ -166,4 +166,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - OpenAI for the AI assistant capabilities
 - San Mateo County for housing data
-- AgentsDeskai for Browser Tools MCP 
+- AgentsDeskai for Browser Tools MCP
